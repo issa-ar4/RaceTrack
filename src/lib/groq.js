@@ -15,8 +15,8 @@ export function isUsingDefaultKey() {
 }
 
 export async function callGroq(messages) {
-  const client = getGroqClient();
   try {
+    const client = getGroqClient();
     const response = await client.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages,

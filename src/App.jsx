@@ -32,20 +32,32 @@ export default function App() {
 
   async function handleGenerate(formData) {
     lastFormData.current = formData;
+
+    const userKey = localStorage.getItem("user_groq_key");
+    const defaultKey = import.meta.env.VITE_DEFAULT_GROQ_KEY;
+    if (!userKey && !defaultKey) {
+      setShowKeyModal(true);
+      return;
+    }
+
     setView("loading");
     setError("");
 
     const messages = buildRacePrompt(formData);
-    const result = await callGroq(messages);
-
-    if (result.success) {
-      setStrategy(result.content);
-      setView("result");
-    } else if (result.rateLimited) {
-      setView("form");
-      setShowKeyModal(true);
-    } else {
-      setError(result.error || "Something went wrong. Please try again.");
+    try {
+      const result = await callGroq(messages);
+      if (result.success) {
+        setStrategy(result.content);
+        setView("result");
+      } else if (result.rateLimited) {
+        setView("form");
+        setShowKeyModal(true);
+      } else {
+        setError(result.error || "Something went wrong. Please try again.");
+        setView("error");
+      }
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
       setView("error");
     }
   }
