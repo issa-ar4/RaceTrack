@@ -3,7 +3,7 @@ import RaceForm from "./components/RaceForm";
 import StrategyOutput from "./components/StrategyOutput";
 import ApiKeyModal from "./components/ApiKeyModal";
 import LoadingSpinner from "./components/LoadingSpinner";
-import { callGroq } from "./lib/groq";
+import { callGroq, hasApiKey } from "./lib/groq";
 import { buildRacePrompt } from "./prompts/raceStrategy";
 
 function SettingsIcon() {
@@ -33,9 +33,7 @@ export default function App() {
   async function handleGenerate(formData) {
     lastFormData.current = formData;
 
-    const userKey = localStorage.getItem("user_groq_key");
-    const defaultKey = import.meta.env.VITE_DEFAULT_GROQ_KEY;
-    if (!userKey && !defaultKey) {
+    if (!hasApiKey()) {
       setShowKeyModal(true);
       return;
     }

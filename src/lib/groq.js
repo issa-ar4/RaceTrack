@@ -1,17 +1,12 @@
 import Groq from "groq-sdk";
 
 export function getGroqClient() {
-  const userKey = localStorage.getItem("user_groq_key");
-  const apiKey = userKey || import.meta.env.VITE_DEFAULT_GROQ_KEY;
-
-  return new Groq({
-    apiKey,
-    dangerouslyAllowBrowser: true,
-  });
+  const apiKey = localStorage.getItem("user_groq_key");
+  return new Groq({ apiKey, dangerouslyAllowBrowser: true });
 }
 
-export function isUsingDefaultKey() {
-  return !localStorage.getItem("user_groq_key");
+export function hasApiKey() {
+  return !!localStorage.getItem("user_groq_key");
 }
 
 export async function callGroq(messages) {

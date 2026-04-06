@@ -21,8 +21,6 @@ jobs:
       - run: npm ci
 
       - run: npm run build
-        env:
-          VITE_DEFAULT_GROQ_KEY: ${{ secrets.VITE_DEFAULT_GROQ_KEY }}
 
       - uses: JamesIves/github-pages-deploy-action@v4
         with:

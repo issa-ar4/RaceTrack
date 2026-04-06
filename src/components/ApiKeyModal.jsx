@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isUsingDefaultKey } from "../lib/groq";
+import { hasApiKey } from "../lib/groq";
 
 function XIcon() {
   return (
@@ -12,7 +12,7 @@ function XIcon() {
 export default function ApiKeyModal({ isOpen, onClose }) {
   const [key, setKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const usingDefault = isUsingDefaultKey();
+  const keySet = hasApiKey();
 
   if (!isOpen) return null;
 
@@ -56,19 +56,19 @@ export default function ApiKeyModal({ isOpen, onClose }) {
         <div className="mb-5">
           <span
             className={`inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-full font-barlow font-medium ${
-              usingDefault
-                ? "bg-gray-700/60 text-gray-400 border border-gray-700"
-                : "bg-orange-500/15 text-orange-400 border border-orange-500/30"
+              keySet
+                ? "bg-orange-500/15 text-orange-400 border border-orange-500/30"
+                : "bg-gray-700/60 text-gray-400 border border-gray-700"
             }`}
           >
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${usingDefault ? "bg-gray-500" : "bg-orange-400"}`} />
-            {usingDefault ? "Using default key" : "Using your key"}
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${keySet ? "bg-orange-400" : "bg-gray-500"}`} />
+            {keySet ? "Using your key" : "No key set"}
           </span>
         </div>
 
         {/* Info text */}
         <p className="text-sm text-gray-400 font-barlow mb-5 leading-relaxed">
-          Enter your own free Groq API key to avoid rate limits.{" "}
+          Enter your free Groq API key to generate strategies.{" "}
           <a
             href="https://console.groq.com"
             target="_blank"
@@ -110,7 +110,7 @@ export default function ApiKeyModal({ isOpen, onClose }) {
           >
             Save Key
           </button>
-          {!usingDefault && (
+          {keySet && (
             <button
               onClick={handleReset}
               className="px-4 py-2.5 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 font-barlow font-medium rounded-lg transition-colors duration-200 cursor-pointer"
