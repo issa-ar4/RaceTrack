@@ -181,6 +181,10 @@ export default function App() {
       <ApiKeyModal
         isOpen={showKeyModal}
         onClose={() => setShowKeyModal(false)}
+        onKeySaved={() => {
+          setShowKeyModal(false);
+          if (lastFormData.current) handleGenerate(lastFormData.current);
+        }}
       />
     </div>
   );

@@ -9,7 +9,7 @@ function XIcon() {
   );
 }
 
-export default function ApiKeyModal({ isOpen, onClose }) {
+export default function ApiKeyModal({ isOpen, onClose, onKeySaved }) {
   const [key, setKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const keySet = hasApiKey();
@@ -20,7 +20,8 @@ export default function ApiKeyModal({ isOpen, onClose }) {
     if (key.trim()) {
       localStorage.setItem("user_groq_key", key.trim());
       setKey("");
-      onClose();
+      if (onKeySaved) onKeySaved();
+      else onClose();
     }
   }
 
