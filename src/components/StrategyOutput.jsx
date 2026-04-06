@@ -32,11 +32,26 @@ function RefreshIcon() {
   );
 }
 
+function stripMarkdown(md) {
+  return md
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/^[*-]\s+/gm, "• ")
+    .replace(/^\d+\.\s+/gm, (m) => m)
+    .replace(/^\|[-: |]+\|$/gm, "")
+    .replace(/\|/g, "  ")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function StrategyOutput({ markdown, onRegenerate, onBack, isLoading }) {
   const [copied, setCopied] = useState(false);
 
   async function copyToClipboard() {
-    await navigator.clipboard.writeText(markdown);
+    await navigator.clipboard.writeText(stripMarkdown(markdown));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -131,16 +146,9 @@ function parseMarkdown(md) {
     '<h2 class="font-barlow-condensed font-bold text-white text-2xl uppercase tracking-wide mt-8 mb-3 pb-2 border-b border-gray-700/60">$1</h2>'
   );
 
-  // Bold and italic
+  // Bullet lists — process BEFORE italic to avoid * conflicts
   html = html.replace(
-    /\*\*(.+?)\*\*/g,
-    '<strong class="text-white font-semibold font-barlow">$1</strong>'
-  );
-  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-
-  // Bullet lists
-  html = html.replace(
-    /^- (.+)$/gm,
+    /^[*-] (.+)$/gm,
     '<li class="text-gray-300 ml-4 list-disc font-barlow leading-relaxed">$1</li>'
   );
   html = html.replace(
@@ -153,6 +161,13 @@ function parseMarkdown(md) {
     /^\d+\. (.+)$/gm,
     '<li class="text-gray-300 ml-4 list-decimal font-barlow leading-relaxed">$1</li>'
   );
+
+  // Bold and italic (after bullets so * at line-start is already consumed)
+  html = html.replace(
+    /\*\*(.+?)\*\*/g,
+    '<strong class="text-white font-semibold font-barlow">$1</strong>'
+  );
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
   // Paragraphs
   html = html

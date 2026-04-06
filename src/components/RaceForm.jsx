@@ -34,11 +34,164 @@ const initialForm = {
   fuelType: "Gels",
 };
 
+// Parse a time string (HH:MM:SS or MM:SS) into total seconds, or null if invalid.
+function parseTime(str) {
+  const trimmed = str.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(":");
+  if (parts.length === 2) {
+    const [minStr, secStr] = parts;
+    if (secStr.length !== 2) return null;
+    const m = parseInt(minStr, 10);
+    const s = parseInt(secStr, 10);
+    if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60) return null;
+    return m * 60 + s;
+  }
+  if (parts.length === 3) {
+    const [hrStr, minStr, secStr] = parts;
+    if (minStr.length !== 2 || secStr.length !== 2) return null;
+    const h = parseInt(hrStr, 10);
+    const m = parseInt(minStr, 10);
+    const s = parseInt(secStr, 10);
+    if (isNaN(h) || isNaN(m) || isNaN(s)) return null;
+    if (h < 0 || m < 0 || m >= 60 || s < 0 || s >= 60) return null;
+    return h * 3600 + m * 60 + s;
+  }
+  return null;
+}
+
+function formatTime(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// Minimum realistic finish times (world-class level — below these is physically impossible)
+const MIN_TIMES = {
+  "5K": 10 * 60,
+  "10K": 22 * 60,
+  "Half Marathon": 55 * 60,
+  Marathon: 2 * 3600,
+  Ultra: 2 * 3600,
+};
+
+function validate(form) {
+  const errors = {};
+
+  // Ultra distance
+  if (form.distance === "Ultra") {
+    if (!form.ultraKm) {
+      errors.ultraKm = "Distance is required for Ultra";
+    } else {
+      const km = parseFloat(form.ultraKm);
+      if (isNaN(km) || km <= 0) {
+        errors.ultraKm = "Must be a positive number";
+      } else if (km <= 42.2) {
+        errors.ultraKm = "Must be longer than a marathon (> 42.2 km)";
+      } else if (km > 500) {
+        errors.ultraKm = "Seems too high — max 500 km";
+      } else if (!Number.isFinite(km)) {
+        errors.ultraKm = "Must be a valid number";
+      }
+    }
+  }
+
+  // Goal time
+  if (form.goalTime) {
+    const seconds = parseTime(form.goalTime);
+    if (seconds === null) {
+      errors.goalTime = "Use HH:MM:SS or MM:SS format (e.g. 1:45:00 or 22:30)";
+    } else if (seconds === 0) {
+      errors.goalTime = "Goal time must be greater than zero";
+    } else {
+      const distKey = form.distance === "Ultra" ? "Ultra" : form.distance;
+      const minTime = MIN_TIMES[distKey];
+      if (minTime && seconds < minTime) {
+        errors.goalTime = `Unrealistically fast for ${distKey} — minimum is ~${formatTime(minTime)}`;
+      }
+    }
+  }
+
+  // Race date
+  if (form.raceDate) {
+    const date = new Date(form.raceDate);
+    if (isNaN(date.getTime())) {
+      errors.raceDate = "Invalid date";
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (date < today) {
+        errors.raceDate = "Race date cannot be in the past";
+      } else {
+        const twoYearsOut = new Date();
+        twoYearsOut.setFullYear(twoYearsOut.getFullYear() + 2);
+        if (date > twoYearsOut) {
+          errors.raceDate = "Race date is too far out — max 2 years";
+        }
+      }
+    }
+  }
+
+  // Weekly mileage
+  if (form.weeklyMileage !== "") {
+    const val = parseFloat(form.weeklyMileage);
+    if (isNaN(val) || val <= 0) {
+      errors.weeklyMileage = "Must be a positive number";
+    } else if (!Number.isFinite(val)) {
+      errors.weeklyMileage = "Must be a valid number";
+    } else {
+      const max = form.unit === "km" ? 300 : 200;
+      if (val > max) {
+        errors.weeklyMileage = `Seems too high — max ${max} ${form.unit}/week`;
+      }
+    }
+  }
+
+  // Longest run
+  if (form.longestRun !== "") {
+    const val = parseFloat(form.longestRun);
+    if (isNaN(val) || val <= 0) {
+      errors.longestRun = "Must be a positive number";
+    } else if (!Number.isFinite(val)) {
+      errors.longestRun = "Must be a valid number";
+    } else {
+      const maxSingle = form.unit === "km" ? 250 : 160;
+      if (val > maxSingle) {
+        errors.longestRun = `Seems too high — max ${maxSingle} ${form.unit}`;
+      } else if (form.weeklyMileage !== "") {
+        const weekly = parseFloat(form.weeklyMileage);
+        if (!isNaN(weekly) && weekly > 0 && val > weekly) {
+          errors.longestRun = `Can't exceed weekly mileage (${form.weeklyMileage} ${form.unit})`;
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
 export default function RaceForm({ onSubmit, isLoading }) {
   const [form, setForm] = useState(initialForm);
+  const [touched, setTouched] = useState({});
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  const errors = validate(form);
+  const hasErrors = Object.keys(errors).length > 0;
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function touch(field) {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  }
+
+  function showError(field) {
+    return (touched[field] || attemptedSubmit) && errors[field];
   }
 
   function toggleSensitivity(item) {
@@ -52,6 +205,8 @@ export default function RaceForm({ onSubmit, isLoading }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    setAttemptedSubmit(true);
+    if (hasErrors) return;
     const data = {
       ...form,
       distance:
@@ -60,7 +215,6 @@ export default function RaceForm({ onSubmit, isLoading }) {
     onSubmit(data);
   }
 
-  const isValid = form.distance && (form.distance !== "Ultra" || form.ultraKm);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -77,7 +231,10 @@ export default function RaceForm({ onSubmit, isLoading }) {
             id="distance"
             label="Race Distance"
             value={form.distance}
-            onChange={(v) => update("distance", v)}
+            onChange={(v) => {
+              update("distance", v);
+              update("ultraKm", "");
+            }}
             options={DISTANCES}
           />
           {form.distance === "Ultra" && (
@@ -87,7 +244,9 @@ export default function RaceForm({ onSubmit, isLoading }) {
               type="number"
               value={form.ultraKm}
               onChange={(v) => update("ultraKm", v)}
+              onBlur={() => touch("ultraKm")}
               placeholder="e.g. 50, 80, 100"
+              error={showError("ultraKm")}
             />
           )}
           <InputField
@@ -95,7 +254,9 @@ export default function RaceForm({ onSubmit, isLoading }) {
             label="Goal Time"
             value={form.goalTime}
             onChange={(v) => update("goalTime", v)}
+            onBlur={() => touch("goalTime")}
             placeholder="HH:MM:SS or MM:SS (optional)"
+            error={showError("goalTime")}
           />
           <InputField
             id="raceDate"
@@ -103,6 +264,8 @@ export default function RaceForm({ onSubmit, isLoading }) {
             type="date"
             value={form.raceDate}
             onChange={(v) => update("raceDate", v)}
+            onBlur={() => touch("raceDate")}
+            error={showError("raceDate")}
           />
           <InputField
             id="location"
@@ -161,8 +324,14 @@ export default function RaceForm({ onSubmit, isLoading }) {
                 type="number"
                 value={form.weeklyMileage}
                 onChange={(e) => update("weeklyMileage", e.target.value)}
+                onBlur={() => touch("weeklyMileage")}
                 placeholder="e.g. 40"
-                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors duration-200 font-barlow"
+                min="0"
+                className={`flex-1 bg-gray-900 border rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition-colors duration-200 font-barlow ${
+                  showError("weeklyMileage")
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                    : "border-gray-700 focus:border-orange-500 focus:ring-orange-500"
+                }`}
               />
               <button
                 type="button"
@@ -172,6 +341,9 @@ export default function RaceForm({ onSubmit, isLoading }) {
                 {form.unit}
               </button>
             </div>
+            {showError("weeklyMileage") && (
+              <p className="mt-1.5 text-xs text-red-400 font-barlow">{errors.weeklyMileage}</p>
+            )}
           </div>
           <InputField
             id="longestRun"
@@ -179,7 +351,9 @@ export default function RaceForm({ onSubmit, isLoading }) {
             type="number"
             value={form.longestRun}
             onChange={(v) => update("longestRun", v)}
+            onBlur={() => touch("longestRun")}
             placeholder="e.g. 25"
+            error={showError("longestRun")}
           />
           <SelectField
             id="fuelType"
@@ -213,10 +387,26 @@ export default function RaceForm({ onSubmit, isLoading }) {
         </div>
       </section>
 
+      {/* Submit error summary */}
+      {attemptedSubmit && hasErrors && (
+        <div className="bg-red-500/10 border border-red-500/40 rounded-xl px-5 py-4">
+          <p className="text-sm text-red-400 font-barlow font-medium mb-1">
+            Please fix the following before continuing:
+          </p>
+          <ul className="list-disc list-inside space-y-1">
+            {Object.entries(errors).map(([field, msg]) => (
+              <li key={field} className="text-sm text-red-400/80 font-barlow">
+                {msg}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* CTA Button */}
       <button
         type="submit"
-        disabled={!isValid || isLoading}
+        disabled={isLoading}
         className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-barlow-condensed font-bold py-4 rounded-xl text-xl uppercase tracking-widest transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed shadow-lg shadow-green-500/20 disabled:shadow-none"
       >
         {isLoading ? "Generating..." : "Generate My Race Strategy"}
@@ -225,7 +415,7 @@ export default function RaceForm({ onSubmit, isLoading }) {
   );
 }
 
-function InputField({ id, label, type = "text", value, onChange, placeholder }) {
+function InputField({ id, label, type = "text", value, onChange, onBlur, placeholder, error }) {
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-gray-300 font-barlow mb-1.5">
@@ -236,9 +426,18 @@ function InputField({ id, label, type = "text", value, onChange, placeholder }) 
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         placeholder={placeholder}
-        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors duration-200 font-barlow"
+        min={type === "number" ? "0" : undefined}
+        className={`w-full bg-gray-900 border rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition-colors duration-200 font-barlow ${
+          error
+            ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+            : "border-gray-700 focus:border-orange-500 focus:ring-orange-500"
+        }`}
       />
+      {error && (
+        <p className="mt-1.5 text-xs text-red-400 font-barlow">{error}</p>
+      )}
     </div>
   );
 }
